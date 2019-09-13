@@ -227,7 +227,7 @@
 	<!-- Namelists for forward run mode only -->
 	<!--*************************************-->
        <nml_record name="AOT_data_assimilation" mode="forward">
-                <nml_option name="config_AOT_DA_on" type="logical" default_value=".true." units="unitless"
+                <nml_option name="config_AOT_DA_on" type="logical" default_value=".false." units="unitless"
                             description="If true, then the AOT data assimilation algorithm is active."
                             possible_values=".true. or .false."
                  />
@@ -1403,18 +1403,6 @@
 			<var name="landIceDraft"/>
 		</stream>
 
-                <stream name="input_obs"
-                             filename_template="input_obs/output_obs.$Y-$M-$D_$h.$m.$s.nc"
-                             type="input"
-                             input_interval="0000_06:00:00"
-                             filename_interval="0000_06:00:00"
-                             immutable="true"
-                             mode="forward">
-                        <var name="temperature_obs"/>
-                        <var name="salinity_obs"/>
-                        <var name="normalVelocity_obs"/>
-                </stream>
-
 		<stream name="block_debug_output"
 				type="output"
 				filename_template="output_debug_block_$B.nc"
@@ -1785,18 +1773,6 @@
 		</stream>
 
 	</streams>
-
-        <var_struct name="state" time_levs="1">
-                <var name="normalVelocity_obs" type="real" dimensions="nVertLevels nEdges Time" units="m s^{-1}"
-                         description="observed normal component (to an edge) of horizontal velocity"
-                />
-                <var name="temperature_obs" type="real" dimensions="nVertLevels nCells Time" units="degrees Celsius"
-                     description="observed potential temperature at cell centers"
-                />
-                <var name="salinity_obs" type="real" dimensions="nVertLevels nCells Time" units="grams of salt per kg of seawater"
-                     description="observed salinity at cell centers"
-                />
-        </var_struct>
 
 	<var_struct name="state" time_levs="2">
 		<var name="normalVelocity" type="real" dimensions="nVertLevels nEdges Time" units="m s^{-1}"
