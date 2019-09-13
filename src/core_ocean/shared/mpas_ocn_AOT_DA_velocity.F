@@ -87,13 +87,13 @@ contains
       !-----------------------------------------------------------------
 
       real (kind=RKIND), dimension(:,:), intent(in) :: &
-         normalVelocity_interp, &        !< Input: velocity
-         normalVelocity_interp_obs    !< Input: observed velocity
+         normalVelocity_interp!, &        !< Input: velocity
+ !        normalVelocity_interp_obs       !< Input: observed velocity
 
       type (mpas_pool_type), intent(in) :: &
          meshPool          !< Input: mesh information
 
-      real (kind=RKIND), intent(in) :: velocityTend_mu
+      real (kind=RKIND), intent(in) :: velocityTend_mu, normalVelocity_interp_obs
 
       !-----------------------------------------------------------------
       !
@@ -121,6 +121,8 @@ contains
       integer :: iEdge, k, nEdges
       integer, dimension(:), pointer :: nEdgesArray
       integer, dimension(:), pointer :: maxLevelEdgeTop
+!      real (kind=RKIND), dimension(:,:), allocatable :: normalVelocity_interp_obs
+
       !-----------------------------------------------------------------
       !
       ! call relevant routines for computing tendencies
@@ -128,8 +130,8 @@ contains
       !   tendencies will be added together
       !
       !-----------------------------------------------------------------
-      err = 0
 
+      err = 0
 !      if ( .not. rayleighFrictionOn ) return ! EDIT THIS LINE FOR AOT DATA ASSIMILATION
 
       call mpas_timer_start('AOT DA horizontal velocity')
@@ -139,28 +141,21 @@ contains
 
       nEdges = nEdgesArray( 1 )
 
-!      if ( rayleighFrictionOn ) then
+      print *, 'tend array in routine', shape(tend)
+      print *, 'array in routine', shape(normalVelocity_interp)
+
          !$omp do schedule(runtime) private(k)
          do iEdge = 1, nEdges
            do k = 1, maxLevelEdgeTop(iEdge)
-
-              tend(k,iEdge) = tend(k,iEdge) - velocityTend_mu * (normalVelocity_interp(k,iEdge) - normalVelocity_interp_obs(k,iEdge))
-
+!              allocate (normalVelocity_interp_obs(maxLevelEdgeTop(iEdge),nEdges))
+!              normalVelocity_interp_obs(k,iEdge) = 1.0
+!              print *, 'the normal velocity is being assigned'
+               tend(k,iEdge) = tend(k,iEdge) + velocityTend_mu*(normalVelocity_interp(k,iEdge) - normalVelocity_interp_obs)!(k,iEdge))
+!              print *, 'tend was computed'
+!              deallocate (normalVelocity_interp_obs)
            enddo
          enddo
          !$omp end do
-!      endif
-
-!      if ( rayleighBottomFrictionOn ) then
-!         !$omp do schedule(runtime) private(k)
-!         do iEdge = 1, nEdges
-!
-!           k = maxLevelEdgeTop(iEdge)
-!           tend(k,iEdge) = tend(k,iEdge) - rayleighDampingCoef * normalVelocity(k,iEdge)
-!
-!         enddo
-!         !$omp end do
-!      endif
 
       call mpas_timer_stop('AOT DA horizontal velocity')
 

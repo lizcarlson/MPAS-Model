@@ -24,6 +24,7 @@ module ocn_AOT_DA_TS
    use mpas_derived_types
    use mpas_pool_routines
    use ocn_constants
+   use mpas_timer
 
    implicit none
    private
@@ -42,6 +43,7 @@ module ocn_AOT_DA_TS
    !--------------------------------------------------------------------
 
    public :: ocn_AOT_DA_TS_compute, &
+             ocn_AOT_DA_TS_compute_debug, &
              ocn_AOT_DA_TS_init
 
    !--------------------------------------------------------------------
@@ -66,10 +68,9 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_AOT_DA_TS_compute(nTracers, nCellsSolve, maxLevelCell, &
-                  tracer_interp, temperature_obs, salinity_obs,  &
-                    tracer_mu, tracer_tend, err)!{{{
-
+   subroutine ocn_AOT_DA_TS_compute(tracerIndex, nCellsSolve, maxLevelCell, &
+                  tracer_interp, tracer_obs, tracer_mu, tracer_tend, err)!{{{
+      implicit none
       !-----------------------------------------------------------------
       !
       ! input variables
@@ -88,14 +89,14 @@ contains
       real (kind=RKIND), dimension(:,:,:), intent(in) :: &
          tracer_interp
       real (kind=RKIND), dimension(:,:), intent(in) :: &
-         temperature_obs, salinity_obs
+         tracer_obs 
 
       ! scalars
-      integer, intent(in) :: nTracers, nCellsSolve
+      integer, intent(in) :: nCellsSolve
+      integer, pointer, intent(in) :: tracerIndex
       real (kind=RKIND), intent(in) :: tracer_mu
-
-!      real (kind=RKIND), dimension(:,:,:), allocatable :: &
-!         tracer_interp_obs
+      
+!      real (kind=RKIND), dimension(:,:,:), pointer, intent(in) :: tracerGroup
 
       !-----------------------------------------------------------------
       !
@@ -120,41 +121,111 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: iCell, iLevel, iTracer
-      integer, pointer :: indexTemperature, indexSalinity 
-      err = 0
+      integer :: iCell, iLevel, iTracer, timeLevel
 
-!      type (mpas_pool_type) :: statePool !< Input: State information
+!      real (kind=RKIND), dimension(:,:,:), pointer :: activeTracers, debugTracers
+!      type (mpas_pool_type) :: statePool
 !      type (mpas_pool_type), pointer :: tracersPool            ! tracers and their tendency
-!
+
 !      call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
 !      call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracers, timeLevel)
-!
+!      call mpas_pool_get_array(tracersPool, 'debugTracers', debugTracers, timeLevel)
 !      call mpas_pool_get_dimension(tracersPool, 'index_temperature', indexTemperature)
 !      call mpas_pool_get_dimension(tracersPool, 'index_salinity', indexSalinity)
+!      call mpas_pool_get_dimension(tracersPool, 'index_tracer1', index_tracer1)
 
+      err = 0
+      
       !$omp do schedule(runtime) private(iLevel, iTracer)
       do iCell=1,nCellsSolve
         do iLevel=1,maxLevelCell(iCell)
-             tracer_tend(1, iLevel, iCell) = tracer_tend(1, iLevel, iCell)  - tracer_mu * &
-                                                   (tracer_interp(1, iLevel, iCell) -  &
-                                                    temperature_obs(iLevel, iCell))
+             tracer_tend(tracerIndex, iLevel, iCell) = tracer_tend(tracerIndex, iLevel, iCell)  - tracer_mu * &
+                                                   (tracer_interp(tracerIndex, iLevel, iCell) -  &
+                                                    tracer_obs(iLevel, iCell))
         enddo
       enddo
 
-      do iCell=1,nCellsSolve
-        do iLevel=1,maxLevelCell(iCell)
-             tracer_tend(2, iLevel, iCell) = tracer_tend(2, iLevel, iCell)  - tracer_mu * &
-                                                   (tracer_interp(2, iLevel, iCell) -  &
-                                                    salinity_obs(iLevel, iCell))
-        enddo
-      enddo
+
       !$omp end do
 
    !--------------------------------------------------------------------
 
    end subroutine ocn_AOT_DA_TS_compute!}}}
 
+   subroutine ocn_AOT_DA_TS_compute_debug(nTracers, nCellsSolve, maxLevelCell, &
+                  tracer_interp, tracer_obs, tracer_mu, tracer_tend, err)!{{{
+      implicit none
+      !-----------------------------------------------------------------
+      !
+      ! input variables
+      !
+      !-----------------------------------------------------------------
+
+      ! one dimensional arrays
+      integer, dimension(:), intent(in) :: &
+         maxLevelCell
+
+!      ! two dimensional arrays
+!      real (kind=RKIND), dimension(:,:), intent(in) :: &
+!         layerThickness
+
+      ! three dimensional arrays
+      real (kind=RKIND), dimension(:,:,:), intent(in) :: &
+         tracer_interp
+      real (kind=RKIND), intent(in) :: &
+         tracer_obs 
+
+      ! scalars
+      integer, intent(in) :: nCellsSolve, nTracers
+      !integer, pointer, intent(in) :: tracerIndex
+      real (kind=RKIND), intent(in) :: tracer_mu
+      
+!      real (kind=RKIND), dimension(:,:,:), pointer, intent(in) :: tracerGroup
+
+      !-----------------------------------------------------------------
+      !
+      ! input/output variables
+      !
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:,:,:), intent(inout) :: &
+        tracer_tend
+
+      !-----------------------------------------------------------------
+      !
+      ! output variables
+      !
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< Output: Error flag
+
+      !-----------------------------------------------------------------
+      !
+      ! local variables
+      !
+      !-----------------------------------------------------------------
+
+      integer :: iCell, iLevel, iTracer, timeLevel
+      
+      err = 0
+      
+      !$omp do schedule(runtime) private(iLevel, iTracer)
+!     print *, 'size of array', shape(tracer_tend)
+      do iCell=1,nCellsSolve
+        do iLevel=1,maxLevelCell(iCell)
+          do iTracer=1,nTracers
+             tracer_tend(iTracer, iLevel, iCell) =  tracer_tend(iTracer, iLevel, iCell) - tracer_mu * &
+                                                  (tracer_interp(iTracer, iLevel, iCell) -  &
+                                                    2.0)!tracer_obs)
+           enddo
+        enddo
+      enddo
+
+      !$omp end do
+
+   !--------------------------------------------------------------------
+
+   end subroutine ocn_AOT_DA_TS_compute_debug!}}}
 !***********************************************************************
 !
 !  routine ocn_AOT_DA_TS_init
