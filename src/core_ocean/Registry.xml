@@ -2921,6 +2921,12 @@
 			 description="surface pressure forcing due to weight of frazil ice"
 			 packages="frazilIce"
 		/>
+                <var name="velocityX_obs" type="real" dimensions="nVertLevels nCells Time" units="m s^{-1}"
+                         description="observed x-component of horizontal velocity"
+                />
+                <var name="velocityY_obs" type="real" dimensions="nVertLevels nCells Time" units="m s^{-1}"
+                         description="observed y-component of horizontal velocity"
+                />
 	</var_struct>
 	<var_struct name="scratch" time_levs="1">
 		<var name="normalThicknessFlux" persistence="scratch" type="real" dimensions="nVertLevels nEdges Time"
