@@ -62,7 +62,6 @@
 		<package name="activeTracersExponentialDecayPKG" description="This package includes variables required to compute exponential decay on the active tracer group."/>
 		<package name="activeTracersIdealAgePKG" description="This package includes variables required to compute ideal age forcing on the active tracer group."/>
 		<package name="activeTracersTTDPKG" description="This package includes variables required to compute transit-time distribution forcing on the active tracer group."/>
-                <package name="activeTracersAOTPKG" description="This package includes variables required to compute the AOT data assimilation feedback control term."/>
 	</packages>
 
 	<var_struct name="state" time_levs="2">
@@ -144,16 +143,6 @@
 				/>
 			</var_array>
 		</var_struct>
-                <var_struct name="tracersAOTdata" time_levs="1">
-                        <var_array name="activeTracersAOTObservedData" type="real" dimensions="nVertLevels nCells Time" packages="activeTracersAOTPKG">
-                               <var name="temperatureAOTObservedData" array_group="activeGRP" units="^\circ C"
-                         description="Observed temperature data for AOT data assimilation"
-                               />
-                               <var name="salinityAOTObservedData" array_group="activeGRP" units="PSU"
-                         description="Observed salinity data for AOT data assimilation"
-                               />
-                        </var_array>
-                </var_struct>
 		<var_struct name="tracersInteriorRestoringFields" time_levs="1">
 			<var_array name="activeTracersInteriorRestoringRate" type="real" dimensions="nVertLevels nCells Time" packages="activeTracersInteriorRestoringPKG">
 				<var name="temperatureInteriorRestoringRate" array_group="activeGRP" units="{s}^-1"
