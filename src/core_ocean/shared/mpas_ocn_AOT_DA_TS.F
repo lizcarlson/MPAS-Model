@@ -68,7 +68,7 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_AOT_DA_TS_compute(tracerIndex, nCellsSolve, maxLevelCell, &
+   subroutine ocn_AOT_DA_TS_compute(nTracers, nCellsSolve, maxLevelCell, &
                   tracer_interp, tracer_obs, tracer_mu, tracer_tend, err)!{{{
       implicit none
       !-----------------------------------------------------------------
@@ -87,13 +87,10 @@ contains
 
       ! three dimensional arrays
       real (kind=RKIND), dimension(:,:,:), intent(in) :: &
-         tracer_interp
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
-         tracer_obs 
+         tracer_interp, tracer_obs 
 
       ! scalars
-      integer, intent(in) :: nCellsSolve
-      integer, pointer, intent(in) :: tracerIndex
+      integer, intent(in) :: nCellsSolve, nTracers
       real (kind=RKIND), intent(in) :: tracer_mu
       
 !      real (kind=RKIND), dimension(:,:,:), pointer, intent(in) :: tracerGroup
@@ -123,25 +120,16 @@ contains
 
       integer :: iCell, iLevel, iTracer, timeLevel
 
-!      real (kind=RKIND), dimension(:,:,:), pointer :: activeTracers, debugTracers
-!      type (mpas_pool_type) :: statePool
-!      type (mpas_pool_type), pointer :: tracersPool            ! tracers and their tendency
-
-!      call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
-!      call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracers, timeLevel)
-!      call mpas_pool_get_array(tracersPool, 'debugTracers', debugTracers, timeLevel)
-!      call mpas_pool_get_dimension(tracersPool, 'index_temperature', indexTemperature)
-!      call mpas_pool_get_dimension(tracersPool, 'index_salinity', indexSalinity)
-!      call mpas_pool_get_dimension(tracersPool, 'index_tracer1', index_tracer1)
-
       err = 0
       
       !$omp do schedule(runtime) private(iLevel, iTracer)
       do iCell=1,nCellsSolve
         do iLevel=1,maxLevelCell(iCell)
-             tracer_tend(tracerIndex, iLevel, iCell) = tracer_tend(tracerIndex, iLevel, iCell)  - tracer_mu * &
-                                                   (tracer_interp(tracerIndex, iLevel, iCell) -  &
-                                                    tracer_obs(iLevel, iCell))
+          do iTracer=1,nTracers
+             tracer_tend(iTracer, iLevel, iCell) = tracer_tend(iTracer, iLevel, iCell)  - tracer_mu * &
+                                                   (tracer_interp(iTracer, iLevel, iCell) -  &
+                                                    tracer_obs(iTracer, iLevel, iCell))
+          enddo
         enddo
       enddo
 

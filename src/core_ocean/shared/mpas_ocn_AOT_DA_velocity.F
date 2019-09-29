@@ -18,11 +18,6 @@
 !>  only on the normalVelocity, no interpolation)
 !
 !-----------------------------------------------------------------------
-!/
-!&AOT_data_assimilation
-!    config_AOT_DA_on = .false.
-!    config_AOT_DA_mu_vel = 0.0
-!    config_AOT_DA_mu_TS = 0.0
 
 module ocn_AOT_DA_velocity
 
@@ -48,6 +43,7 @@ module ocn_AOT_DA_velocity
    !--------------------------------------------------------------------
 
    public :: ocn_AOT_DA_velocity_tend, &
+             ocn_AOT_DA_debug_velocity_tend, &
              ocn_AOT_DA_velocity_init
 
    !--------------------------------------------------------------------
@@ -76,8 +72,8 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_AOT_DA_velocity_tend(meshPool, normalVelocity_interp, & 
-                                        normalVelocity_interp_obs, &
+   subroutine ocn_AOT_DA_velocity_tend(meshPool, normalVelocity, & 
+                                        velocityX_interp_obs, velocityY_interp_obs, &
                                         velocityTend_mu, tend, err)!{{{
 
       !-----------------------------------------------------------------
@@ -87,14 +83,14 @@ contains
       !-----------------------------------------------------------------
 
       real (kind=RKIND), dimension(:,:), intent(in) :: &
-         normalVelocity_interp!, &        !< Input: velocity
- !        normalVelocity_interp_obs       !< Input: observed velocity
+         normalVelocity, &        !< Input: normal velocity
+         velocityX_interp_obs, &  !< Input: x-horizontal velocity
+         velocityY_interp_obs     !< Input: y-horizontal velocity
 
       type (mpas_pool_type), intent(in) :: &
          meshPool          !< Input: mesh information
 
-      real (kind=RKIND), intent(in) :: velocityTend_mu, normalVelocity_interp_obs
-
+      real (kind=RKIND), intent(in) :: velocityTend_mu
       !-----------------------------------------------------------------
       !
       ! input/output variables
@@ -118,11 +114,12 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: iEdge, k, nEdges
+      integer :: iEdge, k, nEdges, cell1, cell2
+      integer, dimension(:,:), pointer :: cellsOnEdge
       integer, dimension(:), pointer :: nEdgesArray
       integer, dimension(:), pointer :: maxLevelEdgeTop
-!      real (kind=RKIND), dimension(:,:), allocatable :: normalVelocity_interp_obs
-
+      real (kind=RKIND), dimension(:), pointer :: angleEdge
+!      real (kind=RKIND), dimension(:), allocatable :: normalVelocity_obs
       !-----------------------------------------------------------------
       !
       ! call relevant routines for computing tendencies
@@ -132,27 +129,39 @@ contains
       !-----------------------------------------------------------------
 
       err = 0
-!      if ( .not. rayleighFrictionOn ) return ! EDIT THIS LINE FOR AOT DATA ASSIMILATION
 
       call mpas_timer_start('AOT DA horizontal velocity')
-
+      call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
+      call mpas_pool_get_array(meshPool, 'angleEdge', angleEdge)
       call mpas_pool_get_dimension(meshPool, 'nEdgesArray', nEdgesArray)
       call mpas_pool_get_array(meshPool, 'maxLevelEdgeTop', maxLevelEdgeTop)
 
       nEdges = nEdgesArray( 1 )
 
-      print *, 'tend array in routine', shape(tend)
-      print *, 'array in routine', shape(normalVelocity_interp)
-
+!      do iEdge = 1, nEdges
+!         do k=1, maxLevelEdgeTop(iEdge)
+!            allocate( normalVelocity_obs(k,nEdges) )
+!         enddo
+!      enddo
+!
+!      do iEdge = 1, nEdges
+!         cell1 = cellsOnEdge(1, iEdge)
+!         cell2 = cellsOnEdge(2, iEdge)
+!         do k=1, maxLevelEdgeTop(iEdge)
+!            normalVelocity_obs(k,iEdge) = cos(angleEdge(iEdge)) * (0.5*(velocityX_interp_obs(k,cell1) + velocityX_interp_obs(k,cell2))) + &
+!                                     sin(angleEdge(iEdge)) * (0.5*(velocityY_interp_obs(k,cell1) + velocityY_interp_obs(k,cell2)))
+!         enddo
+!      enddo
+ 
          !$omp do schedule(runtime) private(k)
          do iEdge = 1, nEdges
-           do k = 1, maxLevelEdgeTop(iEdge)
-!              allocate (normalVelocity_interp_obs(maxLevelEdgeTop(iEdge),nEdges))
-!              normalVelocity_interp_obs(k,iEdge) = 1.0
-!              print *, 'the normal velocity is being assigned'
-               tend(k,iEdge) = tend(k,iEdge) + velocityTend_mu*(normalVelocity_interp(k,iEdge) - normalVelocity_interp_obs)!(k,iEdge))
-!              print *, 'tend was computed'
-!              deallocate (normalVelocity_interp_obs)
+          cell1 = cellsOnEdge(1, iEdge)
+          cell2 = cellsOnEdge(2, iEdge)
+          do k = 1, maxLevelEdgeTop(iEdge)
+               tend(k,iEdge) = tend(k,iEdge) + velocityTend_mu * & 
+                              (  (cos(angleEdge(iEdge)) * (0.5*(velocityX_interp_obs(k,cell1) + velocityX_interp_obs(k,cell2))) + &
+                                  sin(angleEdge(iEdge)) * (0.5*(velocityY_interp_obs(k,cell1) + velocityY_interp_obs(k,cell2))) ) &
+                                - normalVelocity(k,iEdge))
            enddo
          enddo
          !$omp end do
@@ -162,6 +171,118 @@ contains
    !--------------------------------------------------------------------
 
    end subroutine ocn_AOT_DA_velocity_tend!}}}
+
+!***********************************************************************
+!
+!  ocn_AOT_DA_debug_velocity_tend
+!
+!> \brief   Computes AOT data assimilation for horizontal velocity
+!> \author  Todd Ringler
+!> \date    5 January 2012
+!> \details
+!>  This routine computes the horizontal velocity
+!>  tendency with regards to the AOT data assimilation algorithm
+!
+!-----------------------------------------------------------------------
+
+   subroutine ocn_AOT_DA_debug_velocity_tend(meshPool, normalVelocity, & 
+                                        velocityX_interp_obs, velocityY_interp_obs, &
+                                        velocityTend_mu, tend, err)!{{{
+
+      !-----------------------------------------------------------------
+      !
+      ! input variables
+      !
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:,:), intent(in) :: &
+         normalVelocity        !< Input: normal velocity
+      real (kind=RKIND), intent(in) :: &
+         velocityX_interp_obs, &  !< Input: x-horizontal velocity
+         velocityY_interp_obs     !< Input: y-horizontal velocity
+
+      type (mpas_pool_type), intent(in) :: &
+         meshPool          !< Input: mesh information
+
+      real (kind=RKIND), intent(in) :: velocityTend_mu
+      !-----------------------------------------------------------------
+      !
+      ! input/output variables
+      !
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:,:), intent(inout) :: &
+         tend          !< Input/Output: velocity tendency
+
+      !-----------------------------------------------------------------
+      !
+      ! output variables
+      !
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< Output: error flag
+
+      !-----------------------------------------------------------------
+      !
+      ! local variables
+      !
+      !-----------------------------------------------------------------
+
+      integer :: iEdge, k, nEdges, cell1, cell2
+      integer, dimension(:,:), pointer :: cellsOnEdge
+      integer, dimension(:), pointer :: nEdgesArray
+      integer, dimension(:), pointer :: maxLevelEdgeTop
+      real (kind=RKIND), dimension(:), pointer :: angleEdge
+      !-----------------------------------------------------------------
+      !
+      ! call relevant routines for computing tendencies
+      ! note that the user can choose multiple options and the
+      !   tendencies will be added together
+      !
+      !-----------------------------------------------------------------
+
+      err = 0
+
+      call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
+      call mpas_pool_get_array(meshPool, 'angleEdge', angleEdge)
+      call mpas_pool_get_dimension(meshPool, 'nEdgesArray', nEdgesArray)
+      call mpas_pool_get_array(meshPool, 'maxLevelEdgeTop', maxLevelEdgeTop)
+
+      nEdges = nEdgesArray( 1 )
+
+!      do iEdge = 1, nEdges
+!         do k=1, maxLevelEdgeTop(iEdge)
+!            allocate( normalVelocity_obs(k,nEdges) )
+!         enddo
+!      enddo
+!
+!      do iEdge = 1, nEdges
+!         cell1 = cellsOnEdge(1, iEdge)
+!         cell2 = cellsOnEdge(2, iEdge)
+!         do k=1, maxLevelEdgeTop(iEdge)
+!            normalVelocity_obs(k,iEdge) = cos(angleEdge(iEdge)) * (0.5*(velocityX_interp_obs(k,cell1) + velocityX_interp_obs(k,cell2))) + &
+!                                     sin(angleEdge(iEdge)) * (0.5*(velocityY_interp_obs(k,cell1) + velocityY_interp_obs(k,cell2)))
+!         enddo
+!      enddo
+ 
+         !$omp do schedule(runtime) private(k)
+
+         do iEdge = 1, nEdges
+          do k = 1, maxLevelEdgeTop(iEdge)
+               tend(k,iEdge) = tend(k,iEdge) + velocityTend_mu * & 
+                              (  (cos(angleEdge(iEdge))  + &
+                                  sin(angleEdge(iEdge))  ) &
+                                - normalVelocity(k,iEdge))
+           enddo
+         enddo
+         print *, 'max tend =', max(maxval(tend), -minval(tend))
+         !$omp end do
+
+
+   !--------------------------------------------------------------------
+
+   end subroutine ocn_AOT_DA_debug_velocity_tend!}}}
+
 
 !***********************************************************************
 !
