@@ -223,8 +223,8 @@ contains
         tend_normalVelocity, circulation, relativeVorticity, viscosity, kineticEnergyCell, &
         normalizedRelativeVorticityEdge, normalizedPlanetaryVorticityEdge, &
         montgomeryPotential, vertAleTransportTop, divergence, vertViscTopOfEdge, &
-        inSituThermalExpansionCoeff, inSituSalineContractionCoeff!, &
-!        normalVelocity_obs
+        inSituThermalExpansionCoeff, inSituSalineContractionCoeff, velocityX_obs, velocityY_obs
+
 
       real (kind=RKIND), dimension(:,:,:), pointer :: activeTracers
       real (kind=RKIND) :: velocityTend_mu
@@ -233,9 +233,8 @@ contains
 
       integer :: err, iEdge, iCell
       integer, pointer :: indexTemperature, indexSalinity, nEdges, nCells, nEdges_obs, nCells_obs
-
       logical, pointer :: config_disable_vel_all_tend, config_AOT_DA_on
-      character (len=StrKIND), pointer :: config_pressure_gradient_type
+      character (len=StrKIND), pointer :: config_pressure_gradient_type, xtime, simulationStartTime
 
       if (present(timeLevelIn)) then
          timeLevel = timeLevelIn
@@ -249,17 +248,16 @@ contains
 
       call mpas_pool_get_dimension(meshPool, 'nEdges', nEdges)
       call mpas_pool_get_dimension(meshPool, 'nCells', nCells)
-      
+     
 !      call mpas_pool_get_dimension(meshPool, 'nEdges_obs', nEdges_obs)
 !      call mpas_pool_get_dimension(meshPool, 'nCells_obs', nCells_obs)
 
       call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
 
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
-
       call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracers, timeLevel)
-      call mpas_pool_get_dimension(tracersPool, 'index_temperature', indexTemperature)
-      call mpas_pool_get_dimension(tracersPool, 'index_salinity', indexSalinity)
+      call mpas_pool_get_array(diagnosticsPool, 'xtime', xtime)
+      call mpas_pool_get_array(diagnosticsPool, 'simulationStartTime', simulationStartTime)
       call mpas_pool_get_array(diagnosticsPool, 'kineticEnergyCell', kineticEnergyCell)
       call mpas_pool_get_array(diagnosticsPool, 'layerThicknessEdge', layerThicknessEdge)
       call mpas_pool_get_array(diagnosticsPool, 'vertAleTransportTop', vertAleTransportTop)
@@ -353,13 +351,17 @@ contains
       !
       ! velocity tendency: AOT data assimilation on horizontal velocities
       !
-      print *, 'tend array size input', shape(tend_normalVelocity)
-      print *, 'input array size input', shape(normalVelocity)
-      if(config_AOT_DA_on) then
-!         call mpas_pool_get_array(statePool, 'normalVelocity_obs', normalVelocity_obs, 1)
+!      print *, 'tend array size input', shape(tend_normalVelocity)
+!      print *, 'input array size input', shape(normalVelocity)
+      if(config_AOT_DA_on) then!.and. xtime .NE. simulationStartTime) then
+!         call mpas_pool_get_array(forcingPool, 'velocityX_obs', velocityX_obs)
+!         call mpas_pool_get_array(forcingPool, 'velocityY_obs', velocityY_obs)
+!         print *, 'xtime = ', xtime
+!         print *, 'velocityX = ', maxval(velocityX_obs(:,:))
+!         print *, 'velocityY = ', maxval(velocityY_obs(:,:))
          call ocn_AOT_DA_velocity_init(velocityTend_mu, err)
-!         print *, 'the velocity mu is', velocityTend_mu
-         call ocn_AOT_DA_velocity_tend(meshPool, normalVelocity, 1.0, velocityTend_mu, tend_normalVelocity, err)
+!         call ocn_AOT_DA_velocity_tend(meshPool, normalVelocity, velocityX_obs, velocityY_obs, velocityTend_mu, tend_normalVelocity, err)
+         call ocn_AOT_DA_debug_velocity_tend(meshPool, normalVelocity, 1.0, 1.0, velocityTend_mu, tend_normalVelocity, err)
       endif
 
       !
@@ -406,6 +408,7 @@ contains
       type (mpas_pool_type), pointer :: tracersSurfaceFluxPool                  ! surface fluxes
       type (mpas_pool_type), pointer :: tracersSurfaceRestoringFieldsPool       ! surface restoring
       type (mpas_pool_type), pointer :: tracersInteriorRestoringFieldsPool      ! interior restoring
+      type (mpas_pool_type), pointer :: tracersAOTDataPool                      ! AOT observed data
       type (mpas_pool_type), pointer :: tracersExponentialDecayFieldsPool       ! exponential decay
       type (mpas_pool_type), pointer :: tracersIdealAgeFieldsPool               ! ideal age
       type (mpas_pool_type), pointer :: tracersTTDFieldsPool                    ! transit time distribution
@@ -423,7 +426,8 @@ contains
       logical, pointer :: config_compute_active_tracer_budgets, &
                           config_cvmix_kpp_nonlocal_with_implicit_mix, &
                           config_AOT_DA_on
-     real (kind=RKIND), pointer :: salinity_restoring_constant_piston_velocity
+      real (kind=RKIND), pointer :: salinity_restoring_constant_piston_velocity
+      character (len=StrKIND), pointer :: xtime, simulationStartTime
 
       ! iterator for tracer categories
       type (mpas_pool_iterator_type) :: groupItr
@@ -460,14 +464,15 @@ contains
         ecosysTracers, &  !  need ecosys for DMS and MacroMolecules
         debugTracers      !  basic debugging tracer (specifically for testing AOT)
 
-      real (kind=RKIND), dimension(:,:,:), pointer :: tracerGroupInteriorRestoringRate, tracerGroupInteriorRestoringValue
+      real (kind=RKIND), dimension(:,:,:), pointer :: tracerGroupInteriorRestoringRate, tracerGroupInteriorRestoringValue, &
+                                                      tracerGroupAOTObservedData
 
       real (kind=RKIND), dimension(:,:,:), pointer :: &
         activeTracerSurfaceFluxTendency,              &
         activeTracerNonLocalTendency
 
       real (kind=RKIND), dimension(:,:), pointer :: &
-        temperatureShortWaveTendency
+        temperatureShortWaveTendency, temperatureAOTObservedData, salinityAOTObservedData
 
       !
       ! Field pointers
@@ -761,12 +766,15 @@ contains
                ! and salinity
                !
                
-               if(config_use_tracerGroup_AOT_data_assimilation) then
-!                 call mpas_pool_get_array(statePool, 'temperature_obs', temperature_obs)
-!                 call mpas_pool_get_array(statePool, 'salinity_obs', salinity_obs)
-                 call ocn_AOT_DA_TS_init(tracer_mu,err)
-!                 call ocn_AOT_DA_TS_compute_debug(nActiveTracers, nCells, maxLevelCell, tracerGroup, 1.0, tracer_mu, tracerGroupTend, err)
-!                 !call ocn_AOT_DA_TS_compute_debug(nActiveTracers, nCells, maxLevelCell, activeTracers, salinity_obs, tracer_mu, activeTracerTend, err)
+               if(config_use_tracerGroup_AOT_data_assimilation) then !.and. xtime .NE. simulationStartTime) then
+!                  call mpas_pool_get_subpool(forcingPool, 'tracersAOTData', tracersAOTDataPool)
+!                  modifiedGroupName = trim(groupItr % memberName) // "AOTObservedData"
+!                  call mpas_pool_get_array(tracersAOTDataPool, trim(modifiedGroupName), &
+!                                           tracerGroupAOTObservedData)
+!
+                  call ocn_AOT_DA_TS_init(tracer_mu,err)
+!                  call ocn_AOT_DA_TS_compute(nTracerGroup, nCells, maxLevelCell, tracerGroup, &
+!                                             tracerGroupAOTObservedData, tracer_mu, tracerGroupTend, err)
                  call ocn_AOT_DA_TS_compute_debug(nTracerGroup, nCells, maxLevelCell, tracerGroup, 2.0, tracer_mu, tracerGroupTend, err)
                endif
 
