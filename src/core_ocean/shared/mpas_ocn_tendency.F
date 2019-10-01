@@ -353,15 +353,16 @@ contains
       !
 !      print *, 'tend array size input', shape(tend_normalVelocity)
 !      print *, 'input array size input', shape(normalVelocity)
-      if(config_AOT_DA_on) then!.and. xtime .NE. simulationStartTime) then
-!         call mpas_pool_get_array(forcingPool, 'velocityX_obs', velocityX_obs)
-!         call mpas_pool_get_array(forcingPool, 'velocityY_obs', velocityY_obs)
+      if(config_AOT_DA_on .and. xtime .NE. simulationStartTime) then
+         call mpas_pool_get_array(forcingPool, 'velocityX_obs', velocityX_obs)
+         call mpas_pool_get_array(forcingPool, 'velocityY_obs', velocityY_obs)
 !         print *, 'xtime = ', xtime
-!         print *, 'velocityX = ', maxval(velocityX_obs(:,:))
-!         print *, 'velocityY = ', maxval(velocityY_obs(:,:))
+!         print *, 'size of velocityX = ', shape(velocityX_obs)
+!         print *, 'velocityX = ', velocityX_obs(1,1)
+!         print *, 'velocityY = ', velocityY_obs(1,1)
          call ocn_AOT_DA_velocity_init(velocityTend_mu, err)
-!         call ocn_AOT_DA_velocity_tend(meshPool, normalVelocity, velocityX_obs, velocityY_obs, velocityTend_mu, tend_normalVelocity, err)
-         call ocn_AOT_DA_debug_velocity_tend(meshPool, normalVelocity, 1.0, 1.0, velocityTend_mu, tend_normalVelocity, err)
+         call ocn_AOT_DA_velocity_tend(meshPool, normalVelocity, velocityX_obs, velocityY_obs, velocityTend_mu, tend_normalVelocity, err)
+!         call ocn_AOT_DA_debug_velocity_tend(meshPool, normalVelocity, 1.0, 1.0, velocityTend_mu, tend_normalVelocity, err)
       endif
 
       !
@@ -464,8 +465,8 @@ contains
         ecosysTracers, &  !  need ecosys for DMS and MacroMolecules
         debugTracers      !  basic debugging tracer (specifically for testing AOT)
 
-      real (kind=RKIND), dimension(:,:,:), pointer :: tracerGroupInteriorRestoringRate, tracerGroupInteriorRestoringValue, &
-                                                      tracerGroupAOTObservedData
+      real (kind=RKIND), dimension(:,:,:), pointer :: tracerGroupInteriorRestoringRate, tracerGroupInteriorRestoringValue, tracerGroupAOTObservedData
+!      real (kind=RKIND), dimension(:,:), pointer :: 
 
       real (kind=RKIND), dimension(:,:,:), pointer :: &
         activeTracerSurfaceFluxTendency,              &
@@ -547,6 +548,8 @@ contains
       call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
       call mpas_pool_get_array(meshPool, 'latCell', latCell)
 
+      call mpas_pool_get_array(diagnosticsPool, 'xtime', xtime)
+      call mpas_pool_get_array(diagnosticsPool, 'simulationStartTime', simulationStartTime)
 
       call mpas_pool_get_dimension(meshPool, 'nVertLevels', nVertLevels)
       call mpas_pool_get_dimension(meshPool, 'nEdges', nEdges)
@@ -765,18 +768,18 @@ contains
                ! AOT data assimilation tendency for active tracers (temperature
                ! and salinity
                !
-               
-               if(config_use_tracerGroup_AOT_data_assimilation) then !.and. xtime .NE. simulationStartTime) then
-!                  call mpas_pool_get_subpool(forcingPool, 'tracersAOTData', tracersAOTDataPool)
-!                  modifiedGroupName = trim(groupItr % memberName) // "AOTObservedData"
-!                  call mpas_pool_get_array(tracersAOTDataPool, trim(modifiedGroupName), &
-!                                           tracerGroupAOTObservedData)
-!
-                  call ocn_AOT_DA_TS_init(tracer_mu,err)
-!                  call ocn_AOT_DA_TS_compute(nTracerGroup, nCells, maxLevelCell, tracerGroup, &
-!                                             tracerGroupAOTObservedData, tracer_mu, tracerGroupTend, err)
-                 call ocn_AOT_DA_TS_compute_debug(nTracerGroup, nCells, maxLevelCell, tracerGroup, 2.0, tracer_mu, tracerGroupTend, err)
+               if(config_use_tracerGroup_AOT_data_assimilation .and. xtime .NE. simulationStartTime) then 
+                     call mpas_pool_get_subpool(forcingPool, 'tracersAOTdata', tracersAOTDataPool)
+                     modifiedGroupName = trim(groupItr % memberName) // "AOTObservedData"
+                     call mpas_pool_get_array(tracersAOTDataPool, trim(modifiedGroupName), &
+                                           tracerGroupAOTObservedData)
+
+                     call ocn_AOT_DA_TS_init(tracer_mu,err)
+                     call ocn_AOT_DA_TS_compute(nTracerGroup, nCells, maxLevelCell, tracerGroup, &
+                                             tracerGroupAOTObservedData, tracer_mu, tracerGroupTend, layerThickness, err)
+!                 call ocn_AOT_DA_TS_compute_debug(nTracerGroup, nCells, maxLevelCell, tracerGroup, 2.0, tracer_mu, tracerGroupTend, err)
                endif
+
 
                !
                ! exponential decay tendency
