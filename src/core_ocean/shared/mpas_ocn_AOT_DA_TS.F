@@ -69,7 +69,7 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_AOT_DA_TS_compute(nTracers, nCellsSolve, maxLevelCell, &
-                  tracer_interp, tracer_obs, tracer_mu, tracer_tend, err)!{{{
+                  tracer_interp, tracer_obs, tracer_mu, tracer_tend, layerThickness,  err)!{{{
       implicit none
       !-----------------------------------------------------------------
       !
@@ -81,9 +81,9 @@ contains
       integer, dimension(:), intent(in) :: &
          maxLevelCell
 
-!      ! two dimensional arrays
-!      real (kind=RKIND), dimension(:,:), intent(in) :: &
-!         layerThickness
+      ! two dimensional arrays
+      real (kind=RKIND), dimension(:,:), intent(in) :: &
+         layerThickness
 
       ! three dimensional arrays
       real (kind=RKIND), dimension(:,:,:), intent(in) :: &
@@ -121,12 +121,12 @@ contains
       integer :: iCell, iLevel, iTracer, timeLevel
 
       err = 0
-      
+
       !$omp do schedule(runtime) private(iLevel, iTracer)
       do iCell=1,nCellsSolve
         do iLevel=1,maxLevelCell(iCell)
           do iTracer=1,nTracers
-             tracer_tend(iTracer, iLevel, iCell) = tracer_tend(iTracer, iLevel, iCell)  - tracer_mu * &
+             tracer_tend(iTracer, iLevel, iCell) = tracer_tend(iTracer, iLevel, iCell)  - layerThickness(iLevel,iCell) * tracer_mu * &
                                                    (tracer_interp(iTracer, iLevel, iCell) -  &
                                                     tracer_obs(iTracer, iLevel, iCell))
           enddo
