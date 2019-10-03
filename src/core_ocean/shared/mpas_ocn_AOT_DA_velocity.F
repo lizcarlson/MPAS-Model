@@ -162,6 +162,11 @@ contains
                               (  (cos(angleEdge(iEdge)) * (0.5*(velocityX_interp_obs(k,cell1) + velocityX_interp_obs(k,cell2))) + &
                                   sin(angleEdge(iEdge)) * (0.5*(velocityY_interp_obs(k,cell1) + velocityY_interp_obs(k,cell2))) ) &
                                 - normalVelocity(k,iEdge))
+!               print *, 'normal vel', normalVelocity(k,iEdge)
+!               print *, 'normal vel obs', (cos(angleEdge(iEdge)) * &
+!(0.5*(velocityX_interp_obs(k,cell1) + velocityX_interp_obs(k,cell2))) + &
+!                                  sin(angleEdge(iEdge)) * &
+!(0.5*(velocityY_interp_obs(k,cell1) + velocityY_interp_obs(k,cell2))) )
            enddo
          enddo
          !$omp end do
