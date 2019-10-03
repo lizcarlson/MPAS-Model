@@ -8,7 +8,7 @@
 module mpas_io_streams
 
 #define COMMA ,
-#define STREAM_DEBUG_WRITE(M) call mpas_log_write(M)
+#define STREAM_DEBUG_WRITE(M) !call mpas_log_write(M)
 
 #ifdef SINGLE_PRECISION
 #define REAL_IO_TYPE MPAS_IO_REAL
